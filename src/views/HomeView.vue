@@ -1,22 +1,34 @@
 
 <template>
-  <main>
-  选择摄像头 ：
-  <div class="enlarge_img" style="display:none;"><img src="" @load="getImageSize" class="enlarge img img"/></div>
-  </main>
+  <div>
+    <el-row :gutter="20">
+      <el-col :span="12">
+        <RouterLink to="/pushStream">
+          <el-button type="primary" size="large">
+            推流
+          </el-button>
+        </RouterLink>
+      </el-col>
+      <el-col :span="12">
+        <RouterLink to="/videoMeeting">
+          <el-button type="primary" color="#626aef" size="large">
+            会议
+          </el-button>
+        </RouterLink>
+      </el-col>
+    </el-row>
+  </div>
 </template>
 <script>
-export default{
- async created(){
-    const res = await  navigator.mediaDevices.enumerateDevices();
-    console.log(res,'==========>res')
-  },  
-  methods:{
+export default {
+
+  methods: {
   },
   data() {
-    return{
-      num:1
+    return {
+      num: 1
     }
   }
 }
 </script>
+<style scoped></style>

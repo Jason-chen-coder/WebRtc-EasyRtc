@@ -7,15 +7,26 @@ const router = createRouter({
     {
       path: '/',
       name: 'home',
-      component: HomeView
+      component: HomeView,
+      children: []
     },
     {
-      path: '/about',
-      name: 'about',
+      path: '/pushStream',
+      name: 'pushStream',
       // route level code-splitting
       // this generates a separate chunk (About.[hash].js) for this route
       // which is lazy-loaded when the route is visited.
-      component: () => import('../views/AboutView.vue')
+      component: () => import('../views/pushStream/index.vue')
+    },
+    {
+      path: '/videoMeeting',
+      name: 'videoMeeting',
+      component: () => import('../views/videoMeeting/index.vue')
+    },
+    {
+      path: '/:catchAll(.*)',
+      name: 'notFound',
+      component: () => import('../views/notFound/index.vue')
     }
   ]
 })
