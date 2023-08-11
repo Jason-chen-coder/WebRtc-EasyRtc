@@ -19,9 +19,9 @@ const router = createRouter({
       component: () => import('../views/pushStream/index.vue')
     },
     {
-      path: '/videoMeeting',
-      name: 'videoMeeting',
-      component: () => import('../views/videoMeeting/index.vue')
+      path: '/pullStream',
+      name: 'pullStream',
+      component: () => import('../views/pullStream/index.vue')
     },
     {
       path: '/:catchAll(.*)',
