@@ -2,12 +2,13 @@ import io from 'socket.io-client'
 
 
 
-export function getFetchVideoSocket (serverUrl, token) {
+export function getFetchVideoSocket (serverUrl, token,roomId) {
     const opts = {
       path: '/push-server',
       transports: ['websocket'],
       auth:{
-        token
+        token,
+        roomId
       }
       // transportOptions: {
       //   polling: {

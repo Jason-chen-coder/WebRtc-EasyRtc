@@ -54,8 +54,8 @@
                   :value="item.value" />
               </el-select>
             </el-col>
-            <el-col :span="4">
-              <el-button type="primary" size="large" @click="preview" :disabled="!canStart">预览</el-button>
+            <el-col :span="6">
+              <el-button type="primary" size="large" @click="previewAndGetStream" :disabled="!canStart">预览</el-button>
               <el-button type="info" style="marginLeft:10px;" size="large" @click="reset">重置</el-button>
             </el-col>
           </el-row>
@@ -94,21 +94,38 @@
           <el-col :span="4">
             连接状态：
           </el-col>
-          <el-col :span="20">
+          <!-- <el-col :span="20"> -->
+          <el-col :span="6">
             <el-tag type="success" size="large" class="connect-status" v-if="connectStatus">已连接</el-tag>
             <el-tag type="info" size="large" class="connect-status" v-else>未连接</el-tag>
           </el-col>
+          <el-col :span="6">
+            <el-tag type="success" size="large" class="connect-status" v-if="joinRoomStatus">已加入房间</el-tag>
+          </el-col>
+          <el-col :span="6">
+            <el-tag type="success" size="large" class="connect-status" v-if="pushStatus">正在推流</el-tag>
+          </el-col>
+          <!-- </el-col> -->
         </el-row>
         <el-row :align="`middle`" style="margin-bottom: 20px;">
           <el-col :span="4">
             操作：
           </el-col>
-          <el-col :span="8">
-            <el-button type="primary" class="opt-btn" @click="handleConnect" :disabled="connectStatus">连接</el-button>
+          <el-col :span="5">
+            <el-button type="primary" class="opt-btn" @click="handleConnect" :disabled="!canlink">1.连接</el-button>
           </el-col>
-          <el-col :span="8">
-            <el-button type="primary" class="opt-btn" @click="startPush" :disabled="connectStatus !== 1">{{ pushStatus ==
-              0 ? "开始推流" : "停止推流" }}</el-button>
+          <el-col :span="5">
+            <el-button type="primary" class="opt-btn" @click="joinRoom" :disabled="!canJoinRoom">2.加入房间</el-button>
+          </el-col>
+          <el-col :span="5" v-if="pushStatus == 0">
+            <el-button type="primary" class="opt-btn" @click="startPush" :disabled="!canPush">3.开始推流</el-button>
+          </el-col>
+          <el-col :span="5" v-else>
+            <el-button type="danger" class="opt-btn" @click="stopPush">停止推流</el-button>
+          </el-col>
+          <el-col :span="5">
+            <el-button type="primary" class="opt-btn" :disabled="pushStatus == 0"
+              @click="setMainProducer">设为主摄</el-button>
           </el-col>
         </el-row>
       </el-card>
@@ -144,6 +161,18 @@ export default {
     this.init()
   },
   computed: {
+    canlink() {
+      //已连接 || 已加入房间 || 正在推流  时 禁止连接
+      return !(this.connectStatus || this.joinRoomStatus || this.pushStatus)
+    },
+    canJoinRoom() {
+      //已连接 && 未加入房间 && 未在推流 才能加入房间
+      return (this.connectStatus && !this.joinRoomStatus && !this.pushStatus)
+    },
+    canPush() {
+      //已连接 && 已加入房间 && 未在推流 才能推流
+      return (this.connectStatus && this.joinRoomStatus && !this.pushStatus)
+    },
     maxWidth() {
       if (this.videoInputDeviceId) {
         return this.videoInputOptions.find(item => item.value === this.videoInputDeviceId).capabilitiesWidth.max || 1920
@@ -232,7 +261,9 @@ export default {
       settingDialogVisible: false,
       device: null,
       newSocket: null,
+      roomData: null,
       connectStatus: 0,// 0未连接 1已连接 
+      joinRoomStatus: 0,// 0未加入房间 1已加入房间
       pushStatus: 0,// 0未推流 1正在推流
       mediaType: [
         {
@@ -297,34 +328,42 @@ export default {
         this.settingDialogVisible = true
       })
     },
-    async preview() {
-      let videoPlay = document.querySelector('video#player');
-      try {
-        videoPlay.srcObject = null;
-        this.previewing = false
-        console.log(this.constraints)
-        this.stream = await navigator.mediaDevices.getUserMedia(this.constraints);
-        // 将音频输出设备应用到媒体流
-        if (this.audioOutputDeviceId) {
-          const audioTracks = this.stream.getAudioTracks();
-          audioTracks.forEach(track => {
-            track.applyConstraints({ deviceId: this.audioOutputDeviceId });
-          });
+    previewAndGetStream() {
+      return new Promise((resolve, reject) => {
+        if (!this.videoInputDeviceId) {
+          this.$message.error('请至少选择一个视频源')
+          reject('请至少选择一个视频源')
+          return
         }
-        videoPlay.srcObject = this.stream;
-        this.previewing = true
-      } catch (error) {
-        console.error("获取媒体流失败：", error);
-        this.previewing = false
-        this.$message.error('获取媒体流失败')
-      }
+        try {
+          this.previewing = false
+          navigator.mediaDevices.getUserMedia(this.constraints).then(stream => {
+            this.stream = stream
+            let videoPlay = document.querySelector('video#player');
+            videoPlay.srcObject = this.stream;
+            this.previewing = true
+            resolve(this.stream)
+          })
+          // 将音频输出设备应用到媒体流
+          // if (this.audioOutputDeviceId) {
+          //   const audioTracks = this.stream.getAudioTracks();
+          //   audioTracks.forEach(track => {
+          //     track.applyConstraints({ deviceId: this.audioOutputDeviceId });
+          //   });
+          // }
+        } catch (error) {
+          reject('获取媒体流失败')
+          console.error("获取媒体流失败：", error);
+          this.previewing = false
+          this.$message.error('获取媒体流失败')
+        }
+      })
     },
+
     handleConnect() {
-      this.newSocket = getFetchVideoSocket(this.pushUrl, this.pushToken)
+      this.newSocket = getFetchVideoSocket(this.pushUrl, this.pushToken, this.pushID)
       this.newSocket.request = socketPromise(this.newSocket)
       this.newSocket.on('connect', async (e) => {
-        await this._loadDevice()
-        this.joinRoom()
         this.$message.success('连接成功!')
         this.connectStatus = 1
       })
@@ -358,32 +397,8 @@ export default {
         console.error('load device', e)
       }
     },
-    startPush() {
-      if (this.pushStatus == 1) {
-        this.$message.error('已经正在推流')
-      } else {
-        let encodingParameters = {
-          maxBitrate: 400 * 1024 * 8,
-          minBitrate: 400 * 1024 * 8,
-          maxFramerate: this.frameRate,
-          active: true,
-          adaptivePtime: false,
-          // scalabilityMode: "S1T1"
-        }
-        let params = {
-          track: this.stream.getVideoTracks()[0],
-          stream: this.stream,
-          source: this.videoInputOptions.find(item => item.value === this.videoInputDeviceId).label,
-          encodings: [encodingParameters]
-        }
-        this.sendTransport.produce(params).then((producer) => {
-          this.pushStatus = 1
-          this.videoProducerWrapper = { producer }
-          console.log('producer create successfully. ', producer.kind, producer.id)
-        })
-      }
-    },
     async joinRoom() {
+      await this._loadDevice()
       const { rtpCapabilities } = this.device;
       let params = {
         "forceTcp": false,
@@ -391,17 +406,24 @@ export default {
         "roomId": this.pushID,
         "token": this.pushToken,
         "participant": "",
+        "isFetch": false
       };
       try {
         // 加入房间
         let data = await this.newSocket.request('join_room', params)
-        console.log('加入房间房间成功：',data)
         if (data.error) {
+          this.$message.error(data.error)
           console.error('join_room error -> ', data.error)
+          this.joinRoomStatus = 0
           return
         }
+        console.log('加入房间房间成功：', data)
+        this.$message.success('加入房间房间成功')
+        this.roomData = data
+        this.joinRoomStatus = 1
+
         // 创建SendTransport
-        this.sendTransport = this.device.createSendTransport(data)
+        this.sendTransport = this.device.createSendTransport(this.roomData)
         this.sendTransport.on('connect', ({ dtlsParameters }, callback, errback) => {
           this.newSocket.request('connect_room', {
             roomId: this.pushID,
@@ -425,6 +447,81 @@ export default {
         console.log(err, '==========>err')
       }
     },
+    startPush() {
+      // 更新stream
+      this.previewAndGetStream().then(() => {
+        try {
+          // 推视频
+          let encodingParameters = {
+            maxBitrate: 400 * 1024 * 8,
+            minBitrate: 400 * 1024 * 8,
+            maxFramerate: this.frameRate,
+            active: true,
+            adaptivePtime: false,
+            // scalabilityMode: "S1T1"
+          }
+          let params = {
+            track: this.stream.getVideoTracks()[0],
+            stream: this.stream,
+            source: this.videoInputOptions.find(item => item.value === this.videoInputDeviceId).label,
+            encodings: [encodingParameters]
+          }
+          this.sendTransport.produce(params).then((producer) => {
+            this.pushStatus = 1
+            this.videoProducerWrapper = { producer }
+            this.$message.success('推流成功')
+            console.log('producer create successfully. ', producer)
+            // 配置主摄像头
+
+          })
+        } catch (err) {
+          this.$message.error('推流失败')
+          console.log('producer create fail. ', err)
+        }
+        // 推音频
+      })
+    },
+    async stopPush() {
+      const videoProducer = this.videoProducerWrapper.producer
+      if (videoProducer != null) {
+        await this.newSocket.request("produce_stop", {
+          "producerId": videoProducer.id,
+          "roomId": this.pushID,
+        });
+        videoProducer?.close();
+        this.videoProducerWrapper = null;
+        this.pushStatus = 0;
+        this.roomData = null;
+        console.log("停止视频推流.");
+      }
+      // const audioProducer = this.audioProducerWrapper
+      // if (audioProducer != null) {
+      //   await this.newSocket.request("produce_stop", {
+      //     "producerId": audioProducer.id,
+      //     "roomId": this.pushID,
+      //   });
+      //   audioProducer?.close();
+      //   this.audioProducerWrapper = null;
+      //   console.log("停止音频推流.");
+      // }
+    },
+
+    // 设置主摄像头
+    async setMainProducer() {
+      const videoProducer = this.videoProducerWrapper.producer
+      if (videoProducer != null && this.newSocket) {
+        let data = await this.newSocket.request('set_main_producer', {
+          roomId: this.pushID,
+          mainProducerId: videoProducer.id,
+        })
+        if (data.error) {
+          this.$message.error(data.error)
+          console.error('join_room error -> ', data.error)
+        } else {
+          this.$message.success('设置成功')
+        }
+      }
+    },
     reset() {
       this.previewing = false
       this.videoInputHeight = 1080
@@ -433,6 +530,13 @@ export default {
       this.videoInputDeviceId = ""
       this.audioInputDeviceId = ""
       this.audioOutputDeviceId = ""
+      this.connectStatus = 0
+      this.joinRoomStatus = 0
+      this.pushStatus = 0
+      this.videoProducerWrapper = null;
+      this.audioProducerWrapper = null,
+
+        this.roomData = null;
       let videoPlay = document.querySelector('video#player');
       videoPlay.srcObject = null;
     },
