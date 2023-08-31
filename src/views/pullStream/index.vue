@@ -96,10 +96,13 @@ export default {
             connectStatus: 0,// 0未连接 1已连接 
             joinRoomStatus: 0,// 0未加入房间 1已加入房间 
             device: null,
-            transport: null
+            transport: null,
+            statsTimer: null
         }
     },
-    mounted() {
+    beforeUnmount() {
+        clearTimeout(this.statsTimer)
+        this.statsTimer = null
     },
     computed: {
         canlink() {
@@ -238,8 +241,8 @@ export default {
                     const idx = this.consumerWrappers.findIndex(item => item.producerId === id);
 
                     if (idx < 0) {
-                        const consumer = await this._createConsumer(id);
-                        this.consumerWrappers = [...this.consumerWrappers, consumer]
+                        const consumerWrapper = await this._createConsumer(id);
+                        this.consumerWrappers = [...this.consumerWrappers, consumerWrapper]
                         if (this.consumerWrappers.length == 1) this.playFetchVideo()
                     }
                 }
@@ -249,8 +252,8 @@ export default {
                 console.log('produce_main_change', roomId, mainProducerId);
 
                 // if (roomId === this.pushID) {
-                // const consumer = await this._createConsumer(mainProducerId);
-                // this.consumerWrappers = [...this.consumerWrappers, consumer]
+                // const consumerWrapper = await this._createConsumer(mainProducerId);
+                // this.consumerWrappers = [...this.consumerWrappers, consumerWrapper]
                 mainProducerId && this.playFetchVideo(mainProducerId)
                 // }
             });
@@ -262,7 +265,7 @@ export default {
         },
 
         playFetchVideo(producerId) {
-            if(this.mainProducerId == producerId)return 
+            if (this.mainProducerId == producerId) return
             let stream = null
             if (this.consumerWrappers.length > 0) {
                 if (producerId) {
@@ -270,14 +273,68 @@ export default {
                 } else {
                     this.mainProducerId = this.consumerWrappers[0].producerId
                 }
-                let consumer = this.consumerWrappers.find(item => item.producerId == this.mainProducerId)
-                console.log(consumer, '========>')
-                stream = consumer.stream;
+                let consumerWrapper = this.consumerWrappers.find(item => item.producerId == this.mainProducerId)
+
+
+                stream = consumerWrapper.stream;
                 console.log('拉流媒体信息：', stream.getVideoTracks()[0].getSettings())
+                this.handleConsumerStats()
             }
             let videoPlay = document.querySelector('video#player');
             videoPlay.srcObject = stream
             this.$message.info('主摄改变')
+        },
+        async handleConsumerStats() {
+            try {
+                let consumerWrapper = this.consumerWrappers.find(item => item.producerId == this.mainProducerId)
+                if (consumerWrapper) {
+                    let stats = await consumerWrapper.consumer.getStats()
+                    if (typeof stats.values === 'function') {
+                        stats = Array.from(stats.values());
+                    }
+                    // candidate-pair：表示一个ICE候选对，包括本地候选和远程候选。
+                    // certificate：表示与媒体流相关的证书信息。
+                    // codec：表示使用的编解码器类型。
+                    // csrc：表示贡献媒体流（Contributing Source, CSRC）的列表。
+                    // data-channel：表示与数据通道相关的统计信息。
+                    // inbound-rtp：表示接收到的实时传输协议（RTP）数据的信息。
+                    // local-candidate：表示本地候选的信息，用于建立媒体连接。
+                    // outbound-rtp：表示发送的实时传输协议（RTP）数据的信息。
+                    // peer-connection：表示与对等连接相关的统计信息。
+                    // receiver：表示接收器的统计信息。
+                    // remote-candidate：表示远程候选的信息，用于建立媒体连接。
+                    // remote-inbound-rtp：表示与远程接收到的媒体流相关的统计信息。
+                    // remote-outbound-rtp：表示与远程发送的媒体流相关的统计信息。
+                    // sender：表示发送器的统计信息。
+                    // stream：表示与媒体流相关的统计信息。
+                    // track：表示与单个媒体轨道相关的统计信息。
+                    // transport：表示与媒体传输相关的统计信息，如网络连接和传输协议。
+                    const outboundRTtp = stats.find(item => item.type === 'outbound-rtp')
+                    const inboundRtp = stats.find(item => item.type === 'inbound-rtp')
+                    console.log('outboundRTtp=====>', outboundRTtp)
+                    console.log('inboundRtp=====>', inboundRtp)
+
+                    const pair = stats.find(item => item.type === 'candidate-pair')
+                    const timestamp = stats[0].timestamp
+
+                    if (pair) {
+                        const { bytesReceived, currentRoundTripTime } = pair
+                        const deltaBytesReceived = bytesReceived - this.bytesReceived
+                        const deltaTimestamp = timestamp - this.timestamp
+                        const bitrate = deltaBytesReceived / deltaTimestamp * 1000 / 1000
+                        this.bytesReceived = bytesReceived
+                        let currentRoundTripTimeMs = currentRoundTripTime * 1000
+                        console.log(`比特率：${bitrate.toFixed(2)}KB/s`)
+                        console.log(`拉流延时RTT：${currentRoundTripTimeMs}ms`)
+                        this.timestamp = timestamp
+                    }
+                } else {
+                    clearTimeout(this.statsTimer)
+                }
+            } catch (err) {
+                console.log('err===>', err)
+            }
+            this.statsTimer = setTimeout(this.handleConsumerStats, 2000)
         },
         async _createConsumers() {
             console.log('FetchVideo', 'create consumers start...');

@@ -240,6 +240,7 @@ export default {
     return {
       previewing: false,
       videoInputHeight: 1080,
+      pushStatsTimer: null,
       videoInputWidth: 1920,
       frameRate: 30,
       pushUrl: "ws://172.18.4.47:9527/",
@@ -265,6 +266,8 @@ export default {
       connectStatus: 0,// 0未连接 1已连接 
       joinRoomStatus: 0,// 0未加入房间 1已加入房间
       pushStatus: 0,// 0未推流 1正在推流
+      timestamp: 0,
+      bytesSent: 0,
       mediaType: [
         {
           value: 0,
@@ -405,7 +408,7 @@ export default {
         "rtpCapabilities": rtpCapabilities,
         "roomId": this.pushID,
         "token": this.pushToken,
-        "participant": "",
+        "participant": "jasonchen",
         "isFetch": false
       };
       try {
@@ -471,8 +474,7 @@ export default {
             this.videoProducerWrapper = { producer }
             this.$message.success('推流成功')
             console.log('producer create successfully. ', producer)
-            // 配置主摄像头
-
+            this.handlePushStats()
           })
         } catch (err) {
           this.$message.error('推流失败')
@@ -480,6 +482,65 @@ export default {
         }
         // 推音频
       })
+    },
+    async handlePushStats() {
+      const videoProducer = this.videoProducerWrapper.producer
+      if (videoProducer?.id) {
+        let producerStats = await this.newSocket.request('get_producer_stats', {
+          roomId: this.pushID,
+          participant: 'jasonchen',
+          producerId: videoProducer.id,
+        })
+        if (typeof producerStats.values === 'function') {
+          producerStats = Array.from(producerStats.values());
+        }
+        const inboundRTtp = producerStats.find(item => item.type === 'inbound-rtp')
+        if (inboundRTtp) {
+          // console.log((inboundRTtp), '=========>inboundRTtp')
+          // console.log('远程读取的比特率：', 
+          // inboundRTtp.bitrate/ (1024)
+          // , 'Kb/S=========>inboundRTtp')
+          console.log('远程读取的比特率：',
+            (inboundRTtp.bitrate / (1024 * 1024)).toFixed(1)
+            , 'Mb/S=========>inboundRTtp')
+        }
+
+
+        let realProducerStats = await videoProducer.getStats()
+        if (typeof realProducerStats.values === 'function') {
+          realProducerStats = Array.from(realProducerStats.values());
+        }
+        const localOutboundRtp = realProducerStats.find(item => item.type === 'outbound-rtp')
+        // console.log(`localOutboundRtp=====>`,localOutboundRtp)
+        const timestamp = localOutboundRtp.timestamp
+
+        const deltaTimestamp = (timestamp - this.timestamp) / 1000
+        let bytesSentTemp = localOutboundRtp.bytesSent - this.bytesSent
+        let localBitrate = (bytesSentTemp * 8) / deltaTimestamp
+        this.bytesSent = localOutboundRtp.bytesSent
+        this.timestamp = timestamp
+
+        // console.log('本地读取的比特率：', localBitrate/(1024), 'Kb/s=========>outbound-rtp')
+        console.log('本地读取的比特率：', (localBitrate / (1024 * 1024)).toFixed(1), 'Mb/s=========>outbound-rtp')
+
+
+        const localCandidatePair = realProducerStats.find(item => item.type === 'candidate-pair')
+
+        if (localCandidatePair) {
+
+          const { currentRoundTripTime } = localCandidatePair
+          let currentRoundTripTimeMs = currentRoundTripTime * 1000
+          console.log(`推流延时RTT：${currentRoundTripTimeMs}ms`)
+        }
+        this.pushStatsTimer = setTimeout(this.handlePushStats, 2000)
+
+      } else {
+        clearTimeout(this.pushStatsTimer)
+        this.pushStatsTimer = null
+        this.bytesSent = 0
+        this.timestamp = 0
+        return
+      }
     },
     async stopPush() {
       const videoProducer = this.videoProducerWrapper.producer
