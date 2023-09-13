@@ -5,11 +5,12 @@
       <el-card>
         <div class="options">
           <el-row :align="`middle`" :gutter="20">
-            <el-col :span="2">
-              视频源
+            <el-col :span="3.5">
+              视频设备
             </el-col>
-            <el-col :span="6">
-              <el-select v-model="videoInputDeviceId" placeholder="选中视频源" size="large" :loading="loadingEnumerateDevices">
+            <el-col :span="4">
+              <el-select v-model="videoInputDeviceId" @change="videoInputDeviceIdChange" placeholder="选中视频设备" size="large"
+                :loading="loadingEnumerateDevices">
                 <el-option v-for="(item, index) in videoInputOptions" :key="index" :label="item.label"
                   :value="item.value" />
               </el-select>
@@ -18,13 +19,15 @@
               宽
             </el-col>
             <el-col :span="4">
-              <el-input v-model="videoInputWidth" type="number" placeholder="视频源宽" :min="minWidth" :max="maxWidth" />
+              <el-input-number v-model="videoInputWidth" controls-position="right" placeholder="视频设备宽" :min="minWidth"
+                :max="maxWidth" />
             </el-col>
             <el-col :span="1">
               高
             </el-col>
             <el-col :span="4">
-              <el-input v-model="videoInputHeight" type="number" placeholder="视频源高" />
+              <el-input-number v-model="videoInputHeight" controls-position="right" placeholder="视频设备高" :min="minHeight"
+                :max="maxHeight" />
             </el-col>
             <el-col :span="2">
               帧率
@@ -34,10 +37,10 @@
             </el-col>
           </el-row>
           <el-row :align="`middle`" :gutter="20">
-            <el-col :span="3">
+            <el-col :span="3.5">
               音频输入
             </el-col>
-            <el-col :span="6">
+            <el-col :span="4">
               <el-select v-model="audioInputDeviceId" width="100%" placeholder="选中音频输入" size="large"
                 :loading="loadingEnumerateDevices">
                 <el-option v-for="(item, index) in audioInputOptions" :key="index" :label="item.label"
@@ -175,30 +178,30 @@ export default {
     },
     maxWidth() {
       if (this.videoInputDeviceId) {
-        return this.videoInputOptions.find(item => item.value === this.videoInputDeviceId).capabilitiesWidth.max || 1920
+        return this.selectedVideoInputDevice.capabilitiesWidth.max
       } else {
         return 1920
       }
     },
     minWidth() {
       if (this.videoInputDeviceId) {
-        return this.videoInputOptions.find(item => item.value === this.videoInputDeviceId).capabilitiesWidth.min || 1
+        return this.selectedVideoInputDevice.capabilitiesWidth.min
       } else {
         return 1
       }
     },
     minHeight() {
       if (this.videoInputDeviceId) {
-        return this.videoInputOptions.find(item => item.value === this.videoInputDeviceId).capabilitiesHeight.min || 1
+        return this.selectedVideoInputDevice.capabilitiesHeight.min
       } else {
         return 1
       }
     },
     maxHeight() {
       if (this.videoInputDeviceId) {
-        return this.videoInputOptions.find(item => item.value === this.videoInputDeviceId).capabilitiesHeight.max || 1920
+        return this.selectedVideoInputDevice.capabilitiesHeight.max
       } else {
-        return 1920
+        return 1080
       }
     },
     canStart() {
@@ -239,13 +242,18 @@ export default {
   data() {
     return {
       previewing: false,
-      videoInputHeight: 1080,
+      videoInputHeight: 0,
       pushStatsTimer: null,
-      videoInputWidth: 1920,
+      videoInputWidth: 0,
       frameRate: 30,
-      pushUrl: "ws://172.18.4.47:9527/",
-      pushToken: "eyJ0eXBlIjoiand0IiwiYWxnIjoiUlMyNTYifQ.eyJleHBpcmUiOjMxMTA0MTIwMDAwMDAsInVzZXJJZCI6ImM4MGRjNDdmN2NjMTQ3NzM4MDI5ZjczMDBiMzFjNmYzIiwicm9vbUlkIjoiNTA2OTM5MTEwOTkxIiwidXNlcm5hbWUiOiLmtYvor5Xorr7lpIcxIiwiZXhwIjo0NzkxMTgyNzQ5LCJpYXQiOjE2ODA3NzA3NDksImlzcyI6Im1naV9hdXRoIn0.nykP8LfATIFMeXX9bXfY7zYSnkEpN3TQfohvXQZMbAWAfhMkRwrvxdc5jm8h4FPPEhjPv6h2l9q4oZnsa6Gd_F5NNIN94bzmxyCyAdFQjnfTx8dz69l5eioIKQXHxjwVsg16hsJszYsiuxGWH78JfsN25CrzgiO54GQPHx1II5Zv4UGlklofRoPLdYEygH0P_SnvqtBw5nCCbqN8D0plEDyH7Wi088iVGI3efcApiFDQuhhlSddgFKn6CkySkAcTCZb0bwXVSexlS2lH5OS6SAJYqAHJ3DAQUzfVWG3yt65ORzfzeazvFSy29lDgwQvfUg1B4tMOI4YHwhSrqNNWUw",
-      pushID: '506939110991',
+      // pushUrl: "ws://10.49.62.51:9527/",
+      pushUrl: "",
+      pushToken: "",
+      pushID: '925599786798',
+      selectedVideoInputDevice: {
+        capabilitiesWidth: { max: 0, min: 0 },
+        capabilitiesHeight: { max: 0, min: 0 },
+      },
       videoInputDeviceId: "",
       audioInputDeviceId: "",
       audioOutputDeviceId: "",
@@ -283,86 +291,135 @@ export default {
     }
   },
   methods: {
-    init() {
+    async init() {
       // 获取摄像头和麦克风权限
-      navigator.mediaDevices.getUserMedia({ audio: true, video: true }).then(async () => {
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-          return;
-        } else {
-          this.loadingEnumerateDevices = true
-          const res = await navigator.mediaDevices.enumerateDevices();
-          res.forEach(item => {
-            if (item.deviceId !== 'default') {
-              // default会重复
-              if (item.kind === 'audioinput') {
-                this.audioInputOptions.push({
-                  value: item.deviceId,
-                  label: item.label
-                })
-              } else if (item.kind === 'videoinput') {
-                let device = null
-                const supportedConstraints = navigator.mediaDevices.getSupportedConstraints();
-                if ('width' in supportedConstraints && 'height' in supportedConstraints) {
-                  const capabilities = item.getCapabilities();
-                  console.log(`支持的分辨率：`, capabilities.width, capabilities.height);
-                  device = { capabilitiesWidth: capabilities.width, capabilitiesHeight: capabilities.height }
-                  console.log("支持指定宽高约束条件");
-                } else {
-                  console.log("不支持指定宽高约束条件");
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        return;
+      } else {
+        this.loadingEnumerateDevices = true
+        const res = await navigator.mediaDevices.enumerateDevices();
+        res.forEach(item => {
+          if (item.deviceId !== 'default') {
+            // default会重复
+            if (item.kind === 'audioinput') {
+              this.audioInputOptions.push({
+                value: item.deviceId,
+                label: item.label
+              })
+            } else if (item.kind === 'videoinput') {
+              let device = null
+              const supportedConstraints = navigator.mediaDevices.getSupportedConstraints();
+              if ('width' in supportedConstraints && 'height' in supportedConstraints) {
+                const capabilities = item.getCapabilities();
+                console.log(capabilities, '====>capabilities')
+                console.log(`支持的分辨率：`, capabilities.width, capabilities.height);
+                device = { capabilitiesWidth: capabilities.width, capabilitiesHeight: capabilities.height }
+                console.log("支持指定宽高约束条件");
+              } else {
+                console.log("不支持指定宽高约束条件");
 
-                }
-                this.videoInputOptions.push({
-                  ...device,
-                  value: item.deviceId,
-                  label: item.label,
-                })
-              } else if (item.kind === 'audiooutput') {
-                this.audioOutputOptions.push({
-                  value: item.deviceId,
-                  label: item.label
-                })
               }
+              console.log('video-device', item.label, item.getCapabilities())
+              this.videoInputOptions.push({
+                ...device,
+                value: item.deviceId,
+                label: item.label,
+              })
+            } else if (item.kind === 'audiooutput') {
+              this.audioOutputOptions.push({
+                value: item.deviceId,
+                label: item.label
+              })
             }
-          })
-          this.loadingEnumerateDevices = false
+          }
+        })
+        if (this.videoInputOptions.length > 0) {
+          this.videoInputDeviceId = this.videoInputOptions[0].value
+          this.videoInputDeviceIdChange(this.videoInputDeviceId)
+        } else {
+          return
         }
-      }).catch(err => {
-        console.log(err, '============>获取推流设备失败')
-        this.settingDialogVisible = true
-      })
+        if (this.audioInputOptions.length > 0) {
+          this.audioInputDeviceId = this.audioInputOptions[0].value
+        }
+        if (this.audioOutputOptions.length > 0) {
+          this.audioOutputDeviceId = this.audioOutputOptions[0].value
+        }
+        this.previewAndGetStream()
+        this.loadingEnumerateDevices = false
+      }
+    },
+    videoInputDeviceIdChange(val) {
+      if (val) {
+        this.selectedVideoInputDevice = this.videoInputOptions.find(item => item.value === val)
+        this.videoInputWidth = this.selectedVideoInputDevice.capabilitiesWidth.max
+        this.videoInputHeight = this.selectedVideoInputDevice.capabilitiesHeight.max
+
+      }
     },
     previewAndGetStream() {
       return new Promise((resolve, reject) => {
         if (!this.videoInputDeviceId) {
-          this.$message.error('请至少选择一个视频源')
-          reject('请至少选择一个视频源')
+          this.$message.error('请至少选择一个视频设备')
+          reject('请至少选择一个视频设备')
           return
         }
-        try {
-          this.previewing = false
-          navigator.mediaDevices.getUserMedia(this.constraints).then(stream => {
+
+        this.previewing = false
+        console.log(this.constraints, '====>this.constraints')
+        navigator.mediaDevices.getUserMedia(this.constraints)
+          .then(stream => {
             this.stream = stream
+            console.log(this.stream.getVideoTracks()[0].getSettings(), 'this.stream.getVideoTracks()[0]')
             let videoPlay = document.querySelector('video#player');
             videoPlay.srcObject = this.stream;
             this.previewing = true
             resolve(this.stream)
-          })
-          // 将音频输出设备应用到媒体流
-          // if (this.audioOutputDeviceId) {
-          //   const audioTracks = this.stream.getAudioTracks();
-          //   audioTracks.forEach(track => {
-          //     track.applyConstraints({ deviceId: this.audioOutputDeviceId });
-          //   });
-          // }
-        } catch (error) {
-          reject('获取媒体流失败')
-          console.error("获取媒体流失败：", error);
-          this.previewing = false
-          this.$message.error('获取媒体流失败')
-        }
+          })// 失败回调 待通用处理
+          .catch(this.mediaErrorCaptured);
+        // 将音频输出设备应用到媒体流
+        // if (this.audioOutputDeviceId) {
+        //   const audioTracks = this.stream.getAudioTracks();
+        //   audioTracks.forEach(track => {
+        //     track.applyConstraints({ deviceId: this.audioOutputDeviceId });
+        //   });
+        // }
+
       })
     },
-
+    mediaErrorCaptured(error) {
+      console.log("错误信息name打印", error?.name);
+      console.log("错误信息message打印", error?.message);
+      // 媒体权限失败处理（通用 详细）
+      const nameMap = {
+        AbortError: "操作中止",
+        NotAllowedError: "打开设备权限不足，原因是用户拒绝了媒体访问请求",
+        NotFoundError: "找不到满足条件的设备",
+        NotReadableError:
+          "系统上某个硬件、浏览器或网页层面发生的错误导致设备无法被访问",
+        OverConstrainedError: "指定的要求无法被设备满足",
+        SecurityError: "安全错误，使用设备媒体被禁止",
+        TypeError: "类型错误",
+        NotSupportedError: "不支持的操作",
+        NetworkError: "网络错误发生",
+        TimeoutError: "操作超时",
+        UnknownError: "因未知的瞬态的原因使操作失败)",
+        ConstraintError: "条件没满足而导致事件失败的异常操作",
+      };
+      // 媒体权限失败处理（通用 简单）
+      const messageMap = {
+        "permission denied": "麦克风、摄像头权限未开启，请检查后重试",
+        "requested device not found": "未检测到摄像头",
+        "could not start video source": "无法访问到摄像头",
+      };
+      let nameErrorMsg = nameMap[error.name];
+      if (!nameErrorMsg) {
+        nameErrorMsg = messageMap[error.message.toLowerCase() || "未知错误"];
+      }
+      // todo
+      this.$message.error(nameErrorMsg)
+      this.reset()
+    },
     handleConnect() {
       this.newSocket = getFetchVideoSocket(this.pushUrl, this.pushToken, this.pushID)
       this.newSocket.request = socketPromise(this.newSocket)
@@ -397,6 +454,7 @@ export default {
         await this.device.load({ routerRtpCapabilities: rtpCapa })
         console.log('已连接!! rtpCapa ->', rtpCapa)
       } catch (e) {
+        this.$message.error('获取RouterRtpCapabilities信息失败')
         console.error('load device', e)
       }
     },
@@ -413,10 +471,11 @@ export default {
       };
       try {
         // 加入房间
-        let data = await this.newSocket.request('join_room', params)
+        let data = await this.newSocket.request('join_room/v2', params)
         if (data.error) {
           this.$message.error(data.error)
-          console.error('join_room error -> ', data.error)
+          this.$message.error('加入房间房间失败')
+          console.error('join_room/v2 error -> ', data.error)
           this.joinRoomStatus = 0
           return
         }
@@ -577,7 +636,7 @@ export default {
         })
         if (data.error) {
           this.$message.error(data.error)
-          console.error('join_room error -> ', data.error)
+          console.error('join_room/v2 error -> ', data.error)
         } else {
           this.$message.success('设置成功')
         }
@@ -585,8 +644,8 @@ export default {
     },
     reset() {
       this.previewing = false
-      this.videoInputHeight = 1080
-      this.videoInputWidth = 1920
+      this.videoInputHeight = 0
+      this.videoInputWidth = 0
       this.frameRate = 30
       this.videoInputDeviceId = ""
       this.audioInputDeviceId = ""
@@ -596,8 +655,8 @@ export default {
       this.pushStatus = 0
       this.videoProducerWrapper = null;
       this.audioProducerWrapper = null,
-
-        this.roomData = null;
+      this.roomData = null;
+      this.settingDialogVisible = true
       let videoPlay = document.querySelector('video#player');
       videoPlay.srcObject = null;
     },

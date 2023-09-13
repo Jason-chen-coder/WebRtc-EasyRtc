@@ -87,10 +87,11 @@ export default {
     name: 'pullStream',
     data() {
         return {
-            pushUrl: "ws://172.18.4.47:9527/",
-            pushToken: "eyJ0eXBlIjoiand0IiwiYWxnIjoiUlMyNTYifQ.eyJleHBpcmUiOjMxMTA0MTIwMDAwMDAsInVzZXJJZCI6ImM4MGRjNDdmN2NjMTQ3NzM4MDI5ZjczMDBiMzFjNmYzIiwicm9vbUlkIjoiNTA2OTM5MTEwOTkxIiwidXNlcm5hbWUiOiLmtYvor5Xorr7lpIcxIiwiZXhwIjo0NzkxMTgyNzQ5LCJpYXQiOjE2ODA3NzA3NDksImlzcyI6Im1naV9hdXRoIn0.nykP8LfATIFMeXX9bXfY7zYSnkEpN3TQfohvXQZMbAWAfhMkRwrvxdc5jm8h4FPPEhjPv6h2l9q4oZnsa6Gd_F5NNIN94bzmxyCyAdFQjnfTx8dz69l5eioIKQXHxjwVsg16hsJszYsiuxGWH78JfsN25CrzgiO54GQPHx1II5Zv4UGlklofRoPLdYEygH0P_SnvqtBw5nCCbqN8D0plEDyH7Wi088iVGI3efcApiFDQuhhlSddgFKn6CkySkAcTCZb0bwXVSexlS2lH5OS6SAJYqAHJ3DAQUzfVWG3yt65ORzfzeazvFSy29lDgwQvfUg1B4tMOI4YHwhSrqNNWUw",
+            // pushUrl: "ws://10.49.62.51:9527/",
+            pushUrl: "",
+            pushToken: "",
             newSocket: null,
-            pushID: '506939110991',
+            pushID: '925599786798',
             consumerWrappers: [],
             mainProducerId: '',
             connectStatus: 0,// 0未连接 1已连接 
@@ -146,8 +147,7 @@ export default {
             }
         },
         async _subscribe() {
-
-            const data = await this.newSocket.request('join_room', {
+            const data = await this.newSocket.request('join_room/v2', {
                 forceTcp: false,
                 roomId: this.pushID,
                 participant: 'jasonchen',
@@ -236,7 +236,7 @@ export default {
             this.newSocket.on('on_produce', async ({ roomId, id, kind }) => {
                 console.log('FetchVideo', 'on_produce', roomId, id, kind);
 
-
+     
                 if (roomId === this.pushID && kind === 'video') {
                     const idx = this.consumerWrappers.findIndex(item => item.producerId === id);
 
